@@ -2,19 +2,26 @@ name: Daily Polymarket Scan
 
 on:
   schedule:
-    # רץ בכל יום בחצות (UTC)
     - cron: '0 0 * * *'
-  workflow_dispatch: # מאפשר לך להריץ ידנית בלחיצת כפתור
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions: # הוספת הרשאות מפורשות ברמת ה-Job
+      contents: write
+    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # גרסה מעודכנת ויציבה
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # שימוש בטוקן לביצוע הפעולות
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # זה התיקון - הפעולה הרשמית והנכונה
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -30,5 +37,10 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add daily_winners.csv
-          git commit -m "Update daily leaderboard $(date)" || exit 0
-          git push
+          # בדיקה אם יש שינויים לפני ביצוע קומיט כדי למנוע שגיאות ריקות
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update daily leaderboard $(date)"
+            git push origin main
+          else
+            echo "No changes to commit"
+          fi
