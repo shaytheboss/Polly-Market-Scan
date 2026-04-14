@@ -5,62 +5,62 @@ import os
 import sys
 
 def fetch_and_save_leaderboard():
-    # הכתובת המאומתת
-    url = "https://gamma-api.polymarket.com/leaderboard"
+    # זו הכתובת החדשה והפעילה שהאתר משתמש בה כרגע ל-Leaderboard
+    url = "https://leaderboard-api.polymarket.com/leaderboard"
     
-    # הפרמטרים שפולימרקט דורשת כיום כדי לא להחזיר 422
+    # הפרמטרים המדויקים שהדפדפן שולח
     params = {
         "window": "24h",
-        "column": "pnl",  # קריטי: מגדיר שאנחנו מחפשים הצלחה (רווח)
-        "limit": 50
+        "limit": 50,
+        "type": "profit" # שים לב: כאן זה נקרא 'type' ולא 'column'
     }
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Origin": "https://polymarket.com",
         "Referer": "https://polymarket.com/"
     }
     
     try:
         print(f"Connecting to: {url}")
+        # פולימרקט משתמשים ב-API הזה תחת דומיין ייעודי
         response = requests.get(url, headers=headers, params=params, timeout=20)
         
-        # אם השרת מחזיר שגיאה, נדפיס את התוכן שלה לפני שנקרוס
         if response.status_code != 200:
-            print(f"Status Code: {response.status_code}")
-            print(f"Response Content: {response.text}")
+            print(f"Failed! Status: {response.status_code}")
+            print(f"Body: {response.text}")
             response.raise_for_status()
             
         data = response.json()
         
-        # ה-API מחזיר רשימה של אובייקטים
-        if not data or not isinstance(data, list):
-            print("Error: API returned empty or invalid data format.")
+        # המבנה החדש מחזיר אובייקט עם שדה בשם 'data' או רשימה ישירה
+        leaderboard_list = data.get('data', data) if isinstance(data, dict) else data
+        
+        if not leaderboard_list:
+            print("Error: No data in response.")
             sys.exit(1)
             
-        df = pd.DataFrame(data)
-        
-        # הוספת נתוני זמן ולינקים
+        df = pd.DataFrame(leaderboard_list)
         df['snapshot_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # ב-Gamma API העמודה לכתובת הארנק היא 'proxyAddress'
-        if 'proxyAddress' in df.columns:
-            df['profile_link'] = df['proxyAddress'].apply(lambda x: f"https://polymarket.com/profile/{x}")
+        # בכתובת הזו השדה לרוב נקרא 'address' או 'id'
+        addr_col = 'address' if 'address' in df.columns else 'name'
+        if addr_col in df.columns:
+            df['profile_link'] = df[addr_col].apply(lambda x: f"https://polymarket.com/profile/{x}")
         
         file_path = 'daily_winners.csv'
         
-        # שמירה לקובץ (מניח שהקובץ קיים ב-Repo כפי שיצרת)
         if os.path.exists(file_path):
-            # מוודא שסדר העמודות נשמר
             df.to_csv(file_path, mode='a', header=False, index=False)
         else:
             df.to_csv(file_path, index=False)
             
-        print(f"Success! {len(df)} traders recorded.")
+        print(f"Success! Captured {len(df)} top traders.")
 
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
-        sys.exit(1) # מכשיל את ה-Action בגיטהאב
+        sys.exit(1)
 
 if __name__ == "__main__":
     fetch_and_save_leaderboard()
