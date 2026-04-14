@@ -11,14 +11,15 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions: # הוספת הרשאות מפורשות ברמת ה-Job
+    permissions:
       contents: write
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }} # שימוש בטוקן לביצוע הפעולות
+          # זה חשוב כדי לוודא שאנחנו מושכים את כל ההיסטוריה
+          fetch-depth: 0 
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,21 +27,26 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: |
-          pip install requests pandas
+        run: pip install requests pandas
 
       - name: Run Polymarket Script
         run: python main.py
 
       - name: Commit and Push changes
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # מוודאים שאנחנו מסונכרנים עם מה שיש ב-Repo
+          git pull origin main
+          
+          # מוסיפים את הקובץ (עכשיו הוא בטוח קיים כי יצרת אותו ידנית)
           git add daily_winners.csv
-          # בדיקה אם יש שינויים לפני ביצוע קומיט כדי למנוע שגיאות ריקות
-          if [ -n "$(git status --porcelain)" ]; then
+          
+          # מבצעים קומיט רק אם באמת השתנה משהו בנתונים
+          if git diff --staged --quiet; then
+            echo "No new data to commit"
+          else
             git commit -m "Update daily leaderboard $(date)"
             git push origin main
-          else
-            echo "No changes to commit"
           fi
